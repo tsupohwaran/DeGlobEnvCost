@@ -1,0 +1,26 @@
+# Mac OS
+.DS_Store
+
+# Paper
+Manuscript/
+
+# Latex
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.synctex.gz
+*.pdf
+
+# Baiduyun
+*.cfg
+
+# Office
+~$*
+
+# Draft
+Draft*
+Raw/
