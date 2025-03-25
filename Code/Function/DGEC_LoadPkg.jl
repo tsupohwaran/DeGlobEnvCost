@@ -15,6 +15,7 @@ using LinearAlgebra,
     DataFrames, 
 
     # Other packages
+    FixedEffectModels, # Fixed effect models
     QuantEcon,
     AppleAccelerate, # Apple's BLAS !!!Warning: only for MacOS!!!
     BenchmarkTools, # test the speed of the code
