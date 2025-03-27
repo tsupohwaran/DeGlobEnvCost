@@ -15,21 +15,21 @@ function CheckElements(array)
     # Check for NaN elements
     nan_mask = isnan.(array)
     nan_count = sum(nan_mask)
-    
+
     # Find positions of NaN elements
     nan_positions = findall(nan_mask)
-    
+
     # Check for missing elements
     missing_mask = ismissing.(array)
     missing_count = sum(missing_mask)
-    
+
     # Check for Inf elements
     inf_mask = isinf.(array)
     inf_count = sum(inf_mask)
-    
+
     # Find positions of Inf elements
     inf_positions = findall(inf_mask)
-    
+
     # Print results
     if nan_count > 0
         println("Found $nan_count NaN elements in the array")
@@ -37,20 +37,20 @@ function CheckElements(array)
     else
         println("No NaN elements found in the array")
     end
-    
+
     if missing_count > 0
         println("Found $missing_count missing elements in the array")
     else
         println("No missing elements found in the array")
     end
-    
+
     if inf_count > 0
         println("Found $inf_count Inf elements in the array")
         println("Inf positions: $inf_positions")
     else
         println("No Inf elements found in the array")
     end
-    
+
     return (nan_count == 0 && missing_count == 0 && inf_count == 0)
 end
 
@@ -384,13 +384,13 @@ function Converge(UpdateRule::Function, init::Array;
         X = power ? damp * X + (1 - damp) * X .* (newX ./ X) .^ 0.5 : damp * X .+ (1 - damp) * newX
 
         if displayGap
-            println("Iteration: $iter, Gap: $XDiff")
+            println("Iteration: ", iter, ", Gap: ", XDiff)
         end
     end
 
     if displaySummary
         if iter < maxIter
-            println("Successful convergence in $iter iterations.")
+            println("Successful convergence in ", iter, " iterations.")
         else
             println("Maximum number of iterations reached.")
         end
@@ -400,8 +400,8 @@ function Converge(UpdateRule::Function, init::Array;
 end
 
 # Solve the equilibrium
-function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple, 
-    κ̂ʲ::Array{Float64,3}, τ̂ʲ::Array{Float64,3}; 
+function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
+    κ̂ʲ::Array{Float64,3}, τ̂ʲ::Array{Float64,3};
     deficit=false,
     updateData=false, damp=0.8, tol=1e-6, maxIter=1e3, power=false,
     displayGap=false, displaySummary=false)
@@ -417,82 +417,62 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
     # initial guess
     ŵ = ones(N)
     p̂ᶠ = ones(K)
-    X₀ = hcat(ŵ, repeat(p̂ᶠ, 1, N)')
+    X = hcat(ŵ, repeat(p̂ᶠ, 1, N)')
+
+    # for convenience
+    θʲD3 = reshape(θʲ, 1, J, 1)
+    τʲ = τʲ .* τ̂ʲ
 
     # update rule
-    function UpdateRule(X₀)
-        ŵ₀ = X₀[:, 1]
-        p̂ᶠ₀ = X₀[1, 2:end]
+    function UpdateRule(X)
+        ŵ = view(X, :, 1)
+        p̂ᶠ = view(X, 1, 2:4)
 
         # solve p̂ʲ, ĉ when we have ŵ, p̂ᶠ
-        p̂ʲ, ĉʲ = PriceFunc(ŵ₀, p̂ᶠ₀, κ̂ʲ, ξʲ, ξʲᵏ, ξᶠʲ, πʲ, θʲ, J, N; damp=0.0)
+        p̂ʲ, ĉʲ = PriceFunc(ŵ, p̂ᶠ, κ̂ʲ, ξʲ, ξʲᵏ, ξᶠʲ, πʲ, θʲ, θʲD3, J, N; damp=0.0)
 
         # update τ, π, In when we have p̂ʲ, ĉʲ
-        τʲ′ = τʲ .* τ̂ʲ
-        πʲ′ = πʲ .* (κ̂ʲ .* reshape(ĉʲ, 1, size(ĉʲ)...) ./ reshape(p̂ʲ', N, J, 1)) .^ reshape(-θʲ, 1, J, 1)
-        Inˡ′ = Inˡ .* ŵ₀
-        Inᶠ′ = Inᶠ .* p̂ᶠ₀ .^ (1 .+ ηᶠ)
+        πʲ′ = πʲ .* (κ̂ʲ .* reshape(ĉʲ, 1, J, N) ./ reshape(p̂ʲ', N, J, 1)) .^ -θʲD3
+        Inˡ′ = Inˡ .* ŵ
+        Inᶠ′ = Inᶠ .* p̂ᶠ .^ (1 .+ ηᶠ)
 
         # solve Xʲ, Yʲ when we have p̂ʲ, ĉ
-        Xʲ′, Yʲ′, In′, Mni′ = OutputFunc(ξʲᵏ, αʲ, πʲ′, τʲ′, Inˡ′, Inᶠ′, D, J, N)
+        Xʲ, Yʲ, In, Mni = OutputFunc(ξʲᵏ, αʲ, πʲ′, τʲ, Inˡ′, Inᶠ′, D, J, N)
 
         # new ŵ, p̂ᶜ
-        ŵ₁ = sumsqueeze(ξʲ .* Yʲ′, dims = 1) ./ Inˡ
-        # ŵ₁ = ŵ₁ ./ ŵ₁[N] # normalize RoW to 1
+        ŵ = sumsqueeze(ξʲ .* Yʲ, dims=1) ./ Inˡ
+        ŵ = ŵ ./ view(ŵ, N) # normalize RoW to 1
         # ŵ₁ = ŵ₁ ./ mean(ŵ₁)
-        ŵ₁ = ŵ₁ ./ mean(In′)
-        p̂ᶠ₁ = ((sumsqueeze(ξᶠʲ .* reshape(Yʲ′, 1, size(Yʲ)...), dims = (2, 3)) + αᶠ * In′) ./
-                sum(Inᶠ, dims=2)) .^ (1 ./ (1 .+ ηᶠ))
+        # ŵ₁ = ŵ₁ ./ mean(In′)
+        p̂ᶠ = ((sumsqueeze(ξᶠʲ .* reshape(Yʲ, 1, J, N), dims=(2, 3)) + αᶠ * In) ./
+               sum(Inᶠ, dims=2)) .^ (1 ./ (1 .+ ηᶠ))
 
         # check market clearing condition
         # check = CheckResult(J, N, K, ŵ₁, Xʲ′, Yʲ′, In′, Inˡ, Inˡ′, Inᶠ′, ξʲ, ξʲᵏ, ξᶠ, D, π′, τ′)
-        X₁ = hcat(ŵ₁, repeat(p̂ᶠ₁, 1, N)')
-        return X₁, τʲ′, πʲ′, Inˡ′, Inᶠ′, Xʲ′, Yʲ′, In′, Mni′
+        X = hcat(ŵ, repeat(p̂ᶠ, 1, N)')
+        return X, πʲ′, Inˡ′, Inᶠ′, Xʲ, Yʲ, In, Mni
     end
 
     # convergence
-    X = Converge(x -> UpdateRule(x)[1], X₀;
+    X = Converge(x -> UpdateRule(x)[1], X;
         tol=tol, maxIter=maxIter, damp=damp, power=power,
         displayGap=displayGap, displaySummary=displaySummary)
-    X, τʲ′, πʲ′, Inˡ′, Inᶠ′, Xʲ′, Yʲ′, In′, Mni′ = UpdateRule(X)
-    ŵ = X[:, 1]
-    p̂ᶠ = X[1, 2:end]
+    X, πʲ, Inˡ, Inᶠ, Xʲ, Yʲ, In, Mni = UpdateRule(X)
+    ŵ = view(X, :, 1)
+    p̂ᶠ = view(X, 1, 2:4)
 
-    pᶠ′ = p̂ᶠ .* pᶠ
-    Xᶠʲʰ′ = cat(reshape(Yʲ′, 1, size(Yʲ′)...) .* ξᶠʲ, reshape(In′' .* αᶠ, K, 1, N); dims=2)
-    Oʲʰ′ = sumsqueeze(Xᶠʲʰ′ ./ pᶠ′ .* νᶠʲ, dims=1)
-    Ôₙ = vec(sum(Oʲʰ′, dims = 1) ./ sum(Oʲʰ, dims = 1))
-    Ôᵉᵘ = sum(Oʲʰ′[:, 17:43]) ./ sum(Oʲʰ[:, 17:43])
-    Ôʷ = sum(Oʲʰ′) ./ sum(Oʲʰ)
+    pᶠ = p̂ᶠ .* pᶠ
+    Xᶠʲʰ = cat(reshape(Yʲ, 1, J, N) .* ξᶠʲ, reshape(In' .* αᶠ, K, 1, N); dims=2)
+    Oʲʰ = sumsqueeze(Xᶠʲʰ ./ pᶠ .* νᶠʲ, dims=1)
+    inputData = (; Mni, Yʲ, In, Oʲʰ)
+    vars = (; πʲ, Inˡ, Inᶠ, pᶠ)
+    params = (; ξʲ, ξʲᵏ, ξᶠʲ, αʲ, αᶠ, τʲ, D, θʲ, ηᶠ, νᶠʲ, J, N, K)
 
-    dlnÔₙ = (Ôₙ .- 1) * 100
-    dlnÔᵉᵘ = (Ôᵉᵘ .- 1) * 100
-    dlnÔʷ = (Ôʷ .- 1) * 100
-    dlnŵ = (ŵ .- 1) * 100
-    dlnp̂ᶠ = (p̂ᶠ .- 1) * 100
-
-    if updateData == 1
-        Mni = Mni′
-        Yʲ = Yʲ′
-        In = In′
-        Oʲʰ = Oʲʰ′
-        πʲ = πʲ′
-        Inˡ = Inˡ′
-        Inᶠ = Inᶠ′
-        pᶠ = pᶠ′
-        τʲ = τʲ′
-        inputData = (; Mni, Yʲ, In, Oʲʰ)
-        vars = (; πʲ, Inˡ, Inᶠ, pᶠ)
-        params = (; ξʲ, ξʲᵏ, ξᶠʲ, αʲ, αᶠ, τʲ, D, θʲ, ηᶠ, νᶠʲ, J, N, K)
-
-        return inputData, vars, params
-    else
-        return dlnŵ, dlnp̂ᶠ, dlnÔʷ, dlnÔₙ, dlnÔᵉᵘ
-    end
+    return inputData, vars, params
 end
 
 # Solve the price inner loop
-function PriceFunc(ŵ, p̂ᶠ, κ̂ʲ, ξʲ, ξʲᵏ, ξᶠʲ, πʲ, θʲ, J, N;
+function PriceFunc(ŵ, p̂ᶠ, κ̂ʲ, ξʲ, ξʲᵏ, ξᶠʲ, πʲ, θʲ, θʲD3, J, N;
     tol=1e-8,
     maxIter=1e3,
     damp=0.0,
@@ -501,49 +481,59 @@ function PriceFunc(ŵ, p̂ᶠ, κ̂ʲ, ξʲ, ξʲᵏ, ξᶠʲ, πʲ, θʲ, J, N
     displaySummary=false)
 
     # initial guess
-    p̂ʲ₀ = ones(J, N)
+    p̂ʲ = ones(J, N)
+
+    # for convenience
+    lnŵ = ξʲ .* log.(ŵ)'
+    lnp̂F = sumsqueeze(ξᶠʲ .* log.(p̂ᶠ), dims=1)
+    Dim = πʲ .* κ̂ʲ .^ -θʲD3
 
     # update rule
-    function UpdateRule(p̂ʲ₀)
-        lnĉ = ξʲ .* log.(ŵ)' + stack(ξʲᵏ[:, i, :] * log.(p̂ʲ₀[:, i]) for i in 1:N) + sumsqueeze(ξᶠʲ .* log.(p̂ᶠ), dims=1)
-        ĉ = exp.(lnĉ)
-        p̂ʲ₁ = sumsqueeze(πʲ .* (reshape(ĉ, 1, size(ĉ)...) .* κ̂ʲ) .^ reshape(-θʲ, 1, J, 1), dims=3)' .^ (-1 ./ θʲ)
-        return p̂ʲ₁, ĉ
+    function UpdateRule(p̂ʲ)
+        # lnĉʲ = lnŵ + stack(view(ξʲᵏ, :, i, :) * log.(view(p̂ʲ, :, i)) for i in 1:N) + lnp̂F
+        lnĉʲ = lnŵ + sumsqueeze(ξʲᵏ .* reshape(log.(p̂ʲ'), 1, N, J), dims=3) + lnp̂F
+        ĉʲ = exp.(lnĉʲ)
+        p̂ʲ = sumsqueeze(Dim .* reshape(ĉʲ, 1, J, N) .^ -θʲD3, dims=3)' .^ (-1 ./ θʲ)
+        return p̂ʲ, ĉʲ
     end
 
     # convergence
-    X = Converge(x -> UpdateRule(x)[1], p̂ʲ₀; tol=tol, maxIter=maxIter, damp=damp, power=power,
+    p̂ʲ = Converge(x -> UpdateRule(x)[1], p̂ʲ; tol=tol, maxIter=maxIter, damp=damp, power=power,
         displayGap=displayGap, displaySummary=displaySummary)
 
-    return UpdateRule(X)
+    return UpdateRule(p̂ʲ)
 end
 
 # Solve the expenditure inner loop
-function OutputFunc(ξʲᵏ, αʲ, πʲ′, τʲ′, Inˡ′, Inᶠ′, D, J, N;
-    tol = 1e-8, 
-    maxIter = 1e3,
-    damp = 0.0,
-    power = false,
-    displayGap = false,
-    displaySummary = false)
-    
+function OutputFunc(ξʲᵏ, αʲ, πʲ, τʲ, Inˡ, Inᶠ, D, J, N;
+    tol=1e-8,
+    maxIter=1e3,
+    damp=0.0,
+    power=false,
+    displayGap=false,
+    displaySummary=false)
+
     # initial guess
-    Xʲ′ = zeros(J, N);
+    Xʲ = zeros(J, N)
+
+    # for convenience
+    Inˡᶠᴰ = Inˡ + sumsqueeze(Inᶠ, dims=1) + D
 
     # update rule
-    function UpdateRule(Xʲ′₀)
-        Mni′ = repeat(Xʲ′₀', 1, 1, N) .* πʲ′ ./ (1 .+ τʲ′)
-        Yʲ′ = sumsqueeze(Mni′, dims = 1);
-        Inᵗ′ = vec(sum(Mni′ .* τʲ′, dims = (2, 3)));
-        In′ = Inˡ′ + sum(Inᶠ′, dims = 1)' + Inᵗ′ + D;
-        Xʲ′₁ = stack(ξʲᵏ[:, i, :]' * Yʲ′[:, i] for i in 1:N) + αʲ .* In′'
+    function UpdateRule(Xʲ)
+        Mni = repeat(Xʲ', 1, 1, N) .* πʲ ./ (1 .+ τʲ)
+        Yʲ = sumsqueeze(Mni, dims=1)
+        Inᵗ = sumsqueeze(Mni .* τʲ, dims=(2, 3))
+        In = Inᵗ + Inˡᶠᴰ
+        # Xʲ = stack(view(ξʲᵏ, :, i, :)' * view(Yʲ, :, i) for i in 1:N) + αʲ .* In'
+        Xʲ = sumsqueeze(ξʲᵏ .* reshape(Yʲ, J, N, 1), dims=1)' + αʲ .* In'
 
-        return Xʲ′₁, Yʲ′, In′, Mni′
+        return Xʲ, Yʲ, In, Mni
     end
 
     # convergence
-    X = Converge(x -> UpdateRule(x)[1], Xʲ′; tol = tol, maxIter = maxIter, damp = damp, power = power, 
-    displayGap = displayGap, displaySummary = displaySummary);
+    Xʲ = Converge(x -> UpdateRule(x)[1], Xʲ; tol=tol, maxIter=maxIter, damp=damp, power=power,
+        displayGap=displayGap, displaySummary=displaySummary)
 
-    return UpdateRule(X)
+    return UpdateRule(Xʲ)
 end
