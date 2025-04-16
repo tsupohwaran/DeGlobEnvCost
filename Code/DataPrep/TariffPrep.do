@@ -124,3 +124,24 @@ forvalues i = 14/23 {
     keep sector exporter importer tariff_`i'
     save "Tariff_Importer_Sector_Exporter_`i'.dta", replace
 }
+
+*==================================================*
+* check the tariff data from EU and ASEAN
+*==================================================*
+
+import delimited "Tariff_EU_ASEAN_Ind_15_25.csv", clear
+keep reportername product tariffyear weightedaverage importsvaluein1000usd
+
+* Convert product codes to sector identifiers using SecMerge.dta
+merge m:1 product using SecMerge.dta
+drop _merge
+drop product
+drop if sector == .  // Remove observations with missing sector
+
+* Calculate weighted average tariff by sector-exporter-importer combination
+bys tariffyear reportername sector: egen tariff = wtmean(weightedaverage), weight(importsvaluein1000usd)
+duplicates drop tariffyear sector reportername, force 
+drop importsvaluein1000usd weightedaverage
+reshape wide tariff, i(reportername sector) j(tariffyear)
+
+gen tariffChange = tariff2023 / tariff2017

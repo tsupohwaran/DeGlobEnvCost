@@ -64,8 +64,8 @@ end
 
 # Get the equilibrium data by solving the model with no shock 
 @load "Data/Model/ModelDataRaw_17.jld2" inputData vars params
-inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); updateData=true, deficit=true)
-inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); updateData=true)
+inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); deficit=true)
+inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)))
 @save "Data/Model/ModelData_17.jld2" inputData vars params
 
 #==================================================#
@@ -76,6 +76,7 @@ inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.�
 τ̂ʲ = τ_23 ./ τ_17;
 τ̂ʲ[τ̂ʲ.==Inf] .= 1.0
 τ̂ʲ[isnan.(τ̂ʲ)] .= 1.0
+@save "Data/Model/TariffShock_17-23.jld2" τ̂ʲ
 
 for year in [17, 23]
     πʲ_local = load("Data/Model/ModelDataRaw_$year.jld2")["vars"].πʲ
@@ -194,4 +195,17 @@ end
 
 κ̂ʲ_asym = κʲ_23 ./ κʲ_17
 @save "Data/Model/TradeCostAsym.jld2" κ̂ʲ_asym κʲ_17 κʲ_23
-dlnŵ, dlnp̂ᶠ, dlnÔʷ, dlnÔₙ, dlnÔᵉᵘ = SolveModel(inputData, vars, params, κ̂ʲ_asym, τ̂ʲ)
+
+#==================================================#
+# Solve the model with asymetric trade cost
+#==================================================#
+
+include("Function/DGEC_Function.jl")
+@load "Data/Model/ModelData_17.jld2" inputData vars params
+@load "Data/Model/TradeCostAsym.jld2" κ̂ʲ_asym
+@load "Data/Model/TariffShock_17-23.jld2" τ̂ʲ
+
+inputData, vars, params, changes, check = SolveModel(inputData, vars, params, κ̂ʲ_asym, τ̂ʲ; numer = 3);
+
+changes.dlnÔʷ
+A = changes.dlnŴ

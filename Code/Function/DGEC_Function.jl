@@ -278,18 +278,19 @@ function DataPrep(year::Int64)
     # Ξᶠ: share of fossil fuel production in world
     # Link: https://www.eia.gov/international/data/world
     Ξᶠ = Matrix{Float64}(XLSX.readdata("Data/Energy/FossilProd_80-23.xlsx", "$(year + 2000)", "C2:E45"))' # K, N
-    Inᶠ = Ξᶠ .* (sumsqueeze(reshape(Yʲ, 1, size(Yʲ)...) .* ξᶠʲ, dims=(2, 3)) + αᶠ * finalTotal) # K, N
+    Xᶠ = sumsqueeze(reshape(Yʲ, 1, size(Yʲ)...) .* ξᶠʲ, dims=2) + αᶠ .* finalTotal'
+    Inᶠ = Ξᶠ .* sum(Xᶠ, dims = 2) # K, N
 
     # Inᵗ
     Inᵗ = sumsqueeze(Mni .* τʲ, dims=(2, 3))
 
     # D
     Dʲ = sumsqueeze(Mni, dims=3)' - sumsqueeze(Mni, dims=1)
-    Dᶠ = sumsqueeze(reshape(Yʲ, 1, size(Yʲ)...) .* ξᶠʲ, dims=2) - Inᶠ
+    Dᶠ = Xᶠ - Inᶠ
     D = vec(sum(Dʲ, dims=1) + sum(Dᶠ, dims=1))
 
     # Total income
-    In = Inˡ + vec(sum(Inᶠ, dims=1)) + Inᵗ - D
+    In = Inˡ + sumsqueeze(Inᶠ, dims=1) + Inᵗ + D
 
     #=================================================================#
     # Emission (Oₙ) comes from conbustion of fossil fuels (unit: MMtonnes CO₂)
@@ -402,8 +403,8 @@ end
 # Solve the equilibrium
 function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
     κ̂ʲ::Array{Float64,3}, τ̂ʲ::Array{Float64,3};
-    deficit=false,
-    updateData=false, damp=0.8, tol=1e-6, maxIter=1e3, power=false,
+    deficit=false, numer = 2,
+    damp=0.8, tol=1e-6, maxIter=1e3, power=false,
     displayGap=false, displaySummary=false)
 
     # unpack the data
@@ -421,7 +422,7 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
 
     # for convenience
     θʲD3 = reshape(θʲ, 1, J, 1)
-    τʲ = τʲ .* τ̂ʲ
+    τʲ′ = τʲ .* τ̂ʲ
 
     # update rule
     function UpdateRule(X)
@@ -437,38 +438,76 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
         Inᶠ′ = Inᶠ .* p̂ᶠ .^ (1 .+ ηᶠ)
 
         # solve Xʲ, Yʲ when we have p̂ʲ, ĉ
-        Xʲ, Yʲ, In, Mni = OutputFunc(ξʲᵏ, αʲ, πʲ′, τʲ, Inˡ′, Inᶠ′, D, J, N)
+        Xʲ′, Yʲ′, In′, Mni′ = OutputFunc(ξʲᵏ, αʲ, πʲ′, τʲ′, Inˡ′, Inᶠ′, D, J, N)
 
         # new ŵ, p̂ᶜ
-        ŵ = sumsqueeze(ξʲ .* Yʲ, dims=1) ./ Inˡ
-        ŵ = ŵ ./ view(ŵ, N) # normalize RoW to 1
-        # ŵ₁ = ŵ₁ ./ mean(ŵ₁)
-        # ŵ₁ = ŵ₁ ./ mean(In′)
-        p̂ᶠ = ((sumsqueeze(ξᶠʲ .* reshape(Yʲ, 1, J, N), dims=(2, 3)) + αᶠ * In) ./
+        ŵ = sumsqueeze(ξʲ .* Yʲ′, dims=1) ./ Inˡ
+
+        # numeralize
+        if numer == 1
+            ŵ = ŵ = ŵ ./ view(ŵ, N) # normalize change of RoW's wage to 1
+        elseif numer == 2
+            ŵ = ŵ ./ mean(ŵ) # normalize mean change of wage to 1
+        elseif numer == 3
+            # ŵ = ŵ ./ (mean(In′) ./ mean(In)) # normalize mean change of total income to 1
+            ŵ = ŵ ./ mean(In′ ./ In) # normalize mean change of total income to 1
+        end
+        p̂ᶠ = ((sumsqueeze(ξᶠʲ .* reshape(Yʲ′, 1, J, N), dims=(2, 3)) + αᶠ * In′) ./
                sum(Inᶠ, dims=2)) .^ (1 ./ (1 .+ ηᶠ))
 
-        # check market clearing condition
-        # check = CheckResult(J, N, K, ŵ₁, Xʲ′, Yʲ′, In′, Inˡ, Inˡ′, Inᶠ′, ξʲ, ξʲᵏ, ξᶠ, D, π′, τ′)
         X = hcat(ŵ, repeat(p̂ᶠ, 1, N)')
-        return X, πʲ′, Inˡ′, Inᶠ′, Xʲ, Yʲ, In, Mni
+        return X, p̂ʲ, ĉʲ, πʲ′, Inˡ′, Inᶠ′, Xʲ′, Yʲ′, In′, Mni′
     end
 
     # convergence
     X = Converge(x -> UpdateRule(x)[1], X;
         tol=tol, maxIter=maxIter, damp=damp, power=power,
         displayGap=displayGap, displaySummary=displaySummary)
-    X, πʲ, Inˡ, Inᶠ, Xʲ, Yʲ, In, Mni = UpdateRule(X)
+    X, p̂ʲ, ĉʲ, πʲ′, Inˡ′, Inᶠ′, Xʲ′, Yʲ′, In′, Mni′ = UpdateRule(X)
     ŵ = view(X, :, 1)
     p̂ᶠ = view(X, 1, 2:4)
+    pᶠ′ = p̂ᶠ .* pᶠ
 
-    pᶠ = p̂ᶠ .* pᶠ
-    Xᶠʲʰ = cat(reshape(Yʲ, 1, J, N) .* ξᶠʲ, reshape(In' .* αᶠ, K, 1, N); dims=2)
-    Oʲʰ = sumsqueeze(Xᶠʲʰ ./ pᶠ .* νᶠʲ, dims=1)
+    # check market clearing condition
+    check = CheckResult(ŵ, p̂ᶠ, ξʲᵏ, ξᶠʲ, αʲ, Xʲ′, Yʲ′, Mni′, In′, Inˡ, Inˡ′, Inᶠ, Inᶠ′, D, ηᶠ, J, N, K)
+
+    # Welfare change
+    În = In′ ./ In
+    P̂ = prod(p̂ᶠ .^ αᶠ, dims=1)' .* prod(p̂ʲ .^ αʲ, dims=1)' # N, 1
+    Ŵ = În ./ P̂
+
+    # Emission change
+    Xᶠʲʰ′ = cat(reshape(Yʲ′, 1, J, N) .* ξᶠʲ, reshape(In′' .* αᶠ, K, 1, N); dims = 2)
+    Oʲʰ′ = sumsqueeze(Xᶠʲʰ′ ./ pᶠ′ .* νᶠʲ, dims = 1)
+    Ôₙ = sumsqueeze(Oʲʰ′, dims = 1) ./ sumsqueeze(Oʲʰ, dims = 1)
+    Ôʷ = sum(Oʲʰ′) ./ sum(Oʲʰ)
+
+    # update variables
+    Mni = Mni′
+    Yʲ = Yʲ′
+    In = In′
+    Oʲʰ = Oʲʰ′
+    πʲ = πʲ′
+    Inˡ = Inˡ′
+    Inᶠ = Inᶠ′
+    pᶠ = pᶠ′
+    τʲ = τʲ′
+
     inputData = (; Mni, Yʲ, In, Oʲʰ)
     vars = (; πʲ, Inˡ, Inᶠ, pᶠ)
     params = (; ξʲ, ξʲᵏ, ξᶠʲ, αʲ, αᶠ, τʲ, D, θʲ, ηᶠ, νᶠʲ, J, N, K)
 
-    return inputData, vars, params
+    # change of variables
+    dlnŴ = (Ŵ .- 1) * 100
+    dlnŵ = (ŵ .- 1) * 100
+    dlnp̂ᶠ = (p̂ᶠ .- 1) * 100
+    dlnp̂ʲ = (p̂ʲ .- 1) * 100
+    dlnĉʲ = (ĉʲ .- 1) * 100
+    dlnÔₙ = (Ôₙ .- 1) * 100
+    dlnÔʷ = (Ôʷ .- 1) * 100
+    changes = (; dlnŴ, dlnŵ, dlnp̂ᶠ, dlnp̂ʲ, dlnĉʲ, dlnÔₙ, dlnÔʷ)
+    
+    return inputData, vars, params, changes, check
 end
 
 # Solve the price inner loop
@@ -536,4 +575,26 @@ function OutputFunc(ξʲᵏ, αʲ, πʲ, τʲ, Inˡ, Inᶠ, D, J, N;
         displayGap=displayGap, displaySummary=displaySummary)
 
     return UpdateRule(Xʲ)
+end
+
+# Check the market clearing condition
+function CheckResult(ŵ, p̂ᶠ, ξʲᵏ, ξᶠʲ, αʲ, Xʲ′, Yʲ′, Mni′, In′, Inˡ, Inˡ′, Inᶠ, Inᶠ′, D, ηᶠ, J, N, K)
+
+    # Goods market clearing condition
+    checkʲ = maximum(abs.(Xʲ′ - (sumsqueeze(ξʲᵏ .* reshape(Yʲ′, J, N, 1), dims=1)' + αʲ .* In′')))
+
+    # Fossil fuel market clearing condition
+    checkᶠ = maximum(abs.(Inᶠ .* p̂ᶠ .^ (1 .+ ηᶠ) - Inᶠ′))
+
+    # Labor market clearing condition
+    checkˡ = maximum(abs.(ŵ .* Inˡ - Inˡ′))
+
+    # check trade balance
+    Dʲ′ =  sumsqueeze(Mni′, dims=(2, 3)) - sumsqueeze(Mni′, dims=(1, 2))
+    Dᶠ′ = sumsqueeze(reshape(Yʲ′, 1, J, N) .* ξᶠʲ, dims=(1, 2)) + sum(αᶠ' .* In′, dims = 2) - sum(Inᶠ′, dims = 1)'
+    D′ = Dʲ′ + Dᶠ′
+    checkᴰ = maximum(abs.(D′ - D))
+
+    check = [checkʲ, checkᶠ, checkˡ, checkᴰ]
+    return check
 end
