@@ -449,8 +449,7 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
         elseif numer == 2
             ŵ = ŵ ./ mean(ŵ) # normalize mean change of wage to 1
         elseif numer == 3
-            # ŵ = ŵ ./ (mean(In′) ./ mean(In)) # normalize mean change of total income to 1
-            ŵ = ŵ ./ mean(In′ ./ In) # normalize mean change of total income to 1
+            ŵ = ŵ ./ (mean(In′) ./ mean(In)) # normalize mean change of total income to 1
         end
         p̂ᶠ = ((sumsqueeze(ξᶠʲ .* reshape(Yʲ′, 1, J, N), dims=(2, 3)) + αᶠ * In′) ./
                sum(Inᶠ, dims=2)) .^ (1 ./ (1 .+ ηᶠ))
@@ -469,7 +468,9 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
     pᶠ′ = p̂ᶠ .* pᶠ
 
     # check market clearing condition
-    check = CheckResult(ŵ, p̂ᶠ, ξʲᵏ, ξᶠʲ, αʲ, Xʲ′, Yʲ′, Mni′, In′, Inˡ, Inˡ′, Inᶠ, Inᶠ′, D, ηᶠ, J, N, K)
+    check = CheckResult(ŵ, p̂ᶠ, ξʲᵏ, ξᶠʲ, αʲ, αᶠ, Xʲ′, Yʲ′, Mni′, In′, Inˡ, Inˡ′, Inᶠ, Inᶠ′, D, ηᶠ, J, N, K)
+
+    #
 
     # Welfare change
     În = In′ ./ In
@@ -578,7 +579,7 @@ function OutputFunc(ξʲᵏ, αʲ, πʲ, τʲ, Inˡ, Inᶠ, D, J, N;
 end
 
 # Check the market clearing condition
-function CheckResult(ŵ, p̂ᶠ, ξʲᵏ, ξᶠʲ, αʲ, Xʲ′, Yʲ′, Mni′, In′, Inˡ, Inˡ′, Inᶠ, Inᶠ′, D, ηᶠ, J, N, K)
+function CheckResult(ŵ, p̂ᶠ, ξʲᵏ, ξᶠʲ, αʲ, αᶠ, Xʲ′, Yʲ′, Mni′, In′, Inˡ, Inˡ′, Inᶠ, Inᶠ′, D, ηᶠ, J, N, K)
 
     # Goods market clearing condition
     checkʲ = maximum(abs.(Xʲ′ - (sumsqueeze(ξʲᵏ .* reshape(Yʲ′, J, N, 1), dims=1)' + αʲ .* In′')))

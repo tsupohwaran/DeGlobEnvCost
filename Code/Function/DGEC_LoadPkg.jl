@@ -19,5 +19,6 @@ using LinearAlgebra,
     QuantEcon,
     AppleAccelerate, # Apple's BLAS !!!Warning: only for MacOS!!!
     BenchmarkTools, # test the speed of the code
-    PyCall # call Python functions
+    PyCall, # call Python functions
+    ClipData # copy data
     

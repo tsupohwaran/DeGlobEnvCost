@@ -64,8 +64,8 @@ end
 
 # Get the equilibrium data by solving the model with no shock 
 @load "Data/Model/ModelDataRaw_17.jld2" inputData vars params
-inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); deficit=true)
-inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)))
+inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); deficit=true, numer=2)
+inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); numer=2)
 @save "Data/Model/ModelData_17.jld2" inputData vars params
 
 #==================================================#
@@ -201,11 +201,21 @@ end
 #==================================================#
 
 include("Function/DGEC_Function.jl")
+
+# Get the equilibrium data by solving the model with no shock 
+@load "Data/Model/ModelDataRaw_17.jld2" inputData vars params
+inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); deficit=true, numer=3)
+inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.τʲ)), ones(size(params.τʲ)); numer=3)
+@save "Data/Model/ModelData_17.jld2" inputData vars params
+
+# Conterfactual analysis
 @load "Data/Model/ModelData_17.jld2" inputData vars params
 @load "Data/Model/TradeCostAsym.jld2" κ̂ʲ_asym
 @load "Data/Model/TariffShock_17-23.jld2" τ̂ʲ
 
-inputData, vars, params, changes, check = SolveModel(inputData, vars, params, κ̂ʲ_asym, τ̂ʲ; numer = 3);
+# no change for non-trariff trade cost
+# κ̂ʲ = (1 .+ params.τʲ .* τ̂ʲ) ./ (1 .+ params.τʲ); 
+_, _, _, changes, check = SolveModel(inputData, vars, params, κ̂ʲ_asym, τ̂ʲ; numer = 2);
 
-changes.dlnÔʷ
-A = changes.dlnŴ
+clipboard(changes.dlnÔʷ)
+cliparray(changes.dlnÔₙ)

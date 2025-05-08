@@ -2,7 +2,7 @@
 
 julia_version = "1.10.9"
 manifest_format = "2.0"
-project_hash = "8c61c225e2408b5bf0dd58d0ec40408db7a10818"
+project_hash = "445b3ae116d0f2c1effa6c5b533bf559f7256337"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -128,6 +128,12 @@ version = "0.10.8"
     RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
     SentinelArrays = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
     StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
+
+[[deps.ClipData]]
+deps = ["CSV", "InteractiveUtils", "Tables"]
+git-tree-sha1 = "9dcf3a5f614391fb26b26792e9c8572b1ff751f3"
+uuid = "39db22c5-8506-4ef9-b8dc-9d8ef5f2b71d"
+version = "0.2.3"
 
 [[deps.CodecInflate64]]
 deps = ["TranscodingStreams"]

@@ -1,6 +1,7 @@
 [deps]
 AppleAccelerate = "13e28ba4-7ad8-5781-acae-3021b1ed3924"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+ClipData = "39db22c5-8506-4ef9-b8dc-9d8ef5f2b71d"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 ExcelFiles = "89b67f3b-d1aa-5f6f-9ca4-282e8d98620d"
 ExcelReaders = "c04bee98-12a5-510c-87df-2a230cb6e075"
