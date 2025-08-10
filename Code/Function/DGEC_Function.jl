@@ -443,7 +443,7 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
         # new ŵ, p̂ᶜ
         ŵ = sumsqueeze(ξʲ .* Yʲ′, dims=1) ./ Inˡ
 
-        # numeralize
+        # normalize ŵ
         if numer == 1
             ŵ = ŵ = ŵ ./ view(ŵ, N) # normalize change of RoW's wage to 1
         elseif numer == 2
@@ -481,6 +481,7 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
     Xᶠʲʰ′ = cat(reshape(Yʲ′, 1, J, N) .* ξᶠʲ, reshape(In′' .* αᶠ, K, 1, N); dims = 2)
     Oʲʰ′ = sumsqueeze(Xᶠʲʰ′ ./ pᶠ′ .* νᶠʲ, dims = 1)
     Ôₙ = sumsqueeze(Oʲʰ′, dims = 1) ./ sumsqueeze(Oʲʰ, dims = 1)
+    Ôᵉᵘ = sum(Oʲʰ′[:, 17:43]) ./ sum(Oʲʰ[:, 17:43])
     Ôʷ = sum(Oʲʰ′) ./ sum(Oʲʰ)
 
     # update variables
@@ -506,7 +507,8 @@ function SolveModel(inputData::NamedTuple, vars::NamedTuple, params::NamedTuple,
     dlnĉʲ = (ĉʲ .- 1) * 100
     dlnÔₙ = (Ôₙ .- 1) * 100
     dlnÔʷ = (Ôʷ .- 1) * 100
-    changes = (; dlnŴ, dlnŵ, dlnp̂ᶠ, dlnp̂ʲ, dlnĉʲ, dlnÔₙ, dlnÔʷ)
+    dlnÔᵉᵘ = (Ôᵉᵘ .- 1) * 100
+    changes = (; dlnŴ, dlnŵ, dlnp̂ᶠ, dlnp̂ʲ, dlnĉʲ, dlnÔₙ, dlnÔʷ, dlnÔᵉᵘ)
     
     return inputData, vars, params, changes, check
 end

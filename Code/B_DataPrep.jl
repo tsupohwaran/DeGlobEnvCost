@@ -21,8 +21,10 @@ include("Function/DGEC_Function.jl")
 
 # Prepare ADB-MRIO from .xlsx to .jld2 for convenience
 for year in [17, 23]
-    # replace missiong values with 0.0 for type stable
-    @eval $(Symbol("adb_$year")) = Matrix{Float64}(coalesce.(XLSX.readdata("Data/ADB/ADB_Cou73_$(year).xlsx", "ADB MRIO $(year + 2000)", "E8:DMH2570"), 0.0))
+    file_path = "Data/ADB/ADB_Cou73_$(year).xlsx"
+    sheet_name = "ADB MRIO $(year + 2000)"
+    var_name = Symbol("adb_", year)
+    @eval $var_name = Matrix{Float64}(coalesce.(XLSX.readdata($file_path, $sheet_name, "E8:DMH2570"), 0.0))
 end
 @save "Data/ADB/ADB_Cou73_Sec35.jld2" adb_17 adb_23
 
@@ -212,10 +214,14 @@ inputData, vars, params = SolveModel(inputData, vars, params, ones(size(params.�
 @load "Data/Model/ModelData_17.jld2" inputData vars params
 @load "Data/Model/TradeCostAsym.jld2" κ̂ʲ_asym
 @load "Data/Model/TariffShock_17-23.jld2" τ̂ʲ
+@load "Data/Model/TradeCostSym.jld2" κ̂ʲ_sym
 
 # no change for non-trariff trade cost
-# κ̂ʲ = (1 .+ params.τʲ .* τ̂ʲ) ./ (1 .+ params.τʲ); 
-_, _, _, changes, check = SolveModel(inputData, vars, params, κ̂ʲ_asym, τ̂ʲ; numer = 2);
+κ̂ʲ = (1 .+ params.τʲ .* τ̂ʲ) ./ (1 .+ params.τʲ); 
+_, _, _, changes, check = SolveModel(inputData, vars, params, κ̂ʲ_asym, τ̂ʲ; numer = 3);
 
-clipboard(changes.dlnÔʷ)
 cliparray(changes.dlnÔₙ)
+A = vec(sum(κ̂ʲ_asym .* inputData.Mni ./ sumsqueeze(inputData.Mni, dims = (2,3)), dims=(2, 3)))
+cliparray(changes.dlnŴ)
+
+

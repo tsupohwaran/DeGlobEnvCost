@@ -12,7 +12,7 @@ using LinearAlgebra,
     ExcelReaders, # read and write old Excel files
     CSV, # read and write csv files
     Tables,
-    DataFrames, 
+    DataFrames, # same as .dta in Stata
 
     # Other packages
     FixedEffectModels, # Fixed effect models
@@ -20,5 +20,8 @@ using LinearAlgebra,
     AppleAccelerate, # Apple's BLAS !!!Warning: only for MacOS!!!
     BenchmarkTools, # test the speed of the code
     PyCall, # call Python functions
-    ClipData # copy data
-    
+    ClipData, # copy data
+
+    # Plots
+    Plots, 
+    StatsPlots
